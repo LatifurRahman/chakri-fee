@@ -19,6 +19,8 @@ Local Firefox Playwright was attempted and could not launch its temporary profil
 
 The extra full-toolchain audit is **not green**: upstream `braces` and `fflate` advisories propagate through build/lint and unused image generation dependencies, with no npm fixes available at verification. The required production-only audit is clear; see [deployment risks](deployment.md#additional-dependency-audit-finding). No package-name / unzipSync matches were found in the inspected compiled Worker JS. Monitor upstream fixes.
 
+The first hosted run exposed a Firefox navigation race: the flagged-submission confirmation refreshed public data even though no approved record changed. The form now refreshes only after approved submissions. All original browser assertions remain unchanged; the hosted rerun verifies the fix.
+
 ## Still needs production/staging acceptance
 
 No Cloudflare account credentials, live Supabase endpoint or real Turnstile widget are configured in this workspace. Local Hyperdrive emulation does not verify remote pooling, direct-origin TLS/IPv6 networking, real CAPTCHA success/replay/expiry, source-IP behavior at the Cloudflare edge, Worker CPU quotas, backup restoration, cleanup scheduling or rollback. The release preflight checks the remote cache/origin configuration once those credentials are provided. Follow [exact deployment setup](deployment.md) and keep the enable flag false until these gates are met. Local login round-trip timing does not establish CPU consumption; scrypt may exceed Workers Free CPU limits.
@@ -56,3 +58,5 @@ No Cloudflare account credentials, live Supabase endpoint or real Turnstile widg
 - `wrangler.jsonc`
 
 - `docs/verification.md`
+
+- `components/report-form.tsx`

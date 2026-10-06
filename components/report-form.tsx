@@ -107,7 +107,9 @@ export function ReportForm() {
         if (data.field) document.getElementById(data.field)?.focus();
       } else {
         setResult(data);
-        router.refresh();
+        // Only approved submissions change public aggregates. Refreshing a
+        // flagged result can race the contributor's next navigation in Firefox.
+        if (data.status === "approved") router.refresh();
       }
     } catch {
       setError("তথ্য জমা দেওয়া যায়নি। আবার চেষ্টা করুন।");
