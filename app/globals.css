@@ -1,7 +1,7 @@
 @import "tailwindcss";
 @font-face {
   font-family: Bangla;
-  src: url("/fonts/bangla.ttf") format("truetype");
+  src: url("/fonts/bangla.woff2") format("woff2");
   font-weight: 100 900;
   font-display: swap;
 }
@@ -866,5 +866,15 @@ input.fee {
 @media (max-width: 680px) {
   .field-row label {
     min-height: 46px;
+  }
+}
+
+/* Reserve a viewport during streamed loading so the footer cannot jump out of view. */
+main {
+  min-height: calc(100svh - 88px);
+}
+@media (max-width: 680px) {
+  main {
+    min-height: calc(100svh - 76px);
   }
 }

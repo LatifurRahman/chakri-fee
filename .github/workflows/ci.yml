@@ -1,8 +1,18 @@
-name: CI
-on: [push, pull_request]
+name: CI/CD
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: regression-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   check:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     services:
       postgres:
         image: postgres:17
@@ -21,9 +31,78 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npm run lint
+      - run: npm run lint -- --max-warnings=0
+      - run: npm audit --omit=dev --audit-level=high
       - run: npm test
       - run: npm run build
       - run: npm run typecheck
-      - run: npx playwright install --with-deps chromium
+      - run: npx playwright install --with-deps chromium firefox
       - run: npm run test:browser
+      - name: Firefox regression
+        run: BROWSER_NAME=firefox npm run test:browser
+      - run: npm run test:browser:production
+      - name: Save browser regression evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-regression-${{ github.sha }}
+          path: artifacts/
+          retention-days: 7
+          if-no-files-found: ignore
+  deployment-readiness:
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report deployment configuration
+        env:
+          ENABLED: ${{ vars.ENABLE_PRODUCTION_DEPLOY }}
+        run: |
+          if [ "$ENABLED" = "true" ]; then
+            echo "Production deployment enabled; credentials and environment gates follow." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "CI passed. CD is NOT configured: hosting and production database setup is pending. No public deployment was performed." >> "$GITHUB_STEP_SUMMARY"
+          fi
+  deploy:
+    needs: [check, deployment-readiness]
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && vars.ENABLE_PRODUCTION_DEPLOY == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    concurrency:
+      group: production-deployment
+      cancel-in-progress: false
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Fail if production configuration is incomplete
+        run: |
+          test -n "$VERCEL_TOKEN"
+          test -n "$VERCEL_ORG_ID"
+          test -n "$VERCEL_PROJECT_ID"
+          test -n "$DATABASE_URL"
+      - run: npm ci
+      - name: Pull production provider configuration
+        run: npx --yes vercel@62.4.0 pull --yes --environment=production --token="$VERCEL_TOKEN"
+      - name: Validate the production configuration
+        run: node --env-file=.vercel/.env.production.local --import tsx scripts/check-production.ts
+      - name: Build production artifact
+        run: npx --yes vercel@62.4.0 build --prod --token="$VERCEL_TOKEN"
+      - name: Run transactional database migrations
+        run: npm run db:migrate
+      - name: Deploy the verified artifact
+        id: publish
+        run: |
+          npx --yes vercel@62.4.0 deploy --prebuilt --prod --token="$VERCEL_TOKEN" > /tmp/deployment-url.txt
+          echo "url=$(tail -n 1 /tmp/deployment-url.txt)" >> "$GITHUB_OUTPUT"
+      - name: Read-only HTTPS deployment smoke
+        env:
+          DEPLOYMENT_URL: ${{ steps.publish.outputs.url }}
+        run: npm run test:smoke

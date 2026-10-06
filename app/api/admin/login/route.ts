@@ -1,3 +1,4 @@
+import { readJson, HttpError } from "@/lib/http";
 import { NextResponse } from "next/server";
 import {
   sameOrigin,
@@ -15,9 +16,7 @@ export async function POST(request: Request) {
         { error: "কিছুক্ষণ পরে চেষ্টা করুন।" },
         { status: 429 },
       );
-    const text = await request.text();
-    if (text.length > 1024) return new NextResponse(null, { status: 413 });
-    const { password } = JSON.parse(text);
+    const { password } = await readJson(request, 1024);
     if (typeof password !== "string" || !validPassword(password))
       return NextResponse.json(
         { error: "পাসওয়ার্ড সঠিক নয়।" },
@@ -32,7 +31,12 @@ export async function POST(request: Request) {
       maxAge: 8 * 60 * 60,
     });
     return response;
-  } catch {
+  } catch (error) {
+    if (error instanceof HttpError)
+      return NextResponse.json(
+        { error: error.message },
+        { status: error.status },
+      );
     return NextResponse.json(
       { error: "অ্যাডমিন প্রবেশ এখন চালু নেই।" },
       { status: 503 },

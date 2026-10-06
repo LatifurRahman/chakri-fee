@@ -6,6 +6,7 @@ import {
   timingSafeEqual,
 } from "node:crypto";
 import { db } from "./db";
+import { isIP } from "node:net";
 export function digest(value: string) {
   const secret = process.env.ANTI_ABUSE_SECRET;
   if (!secret || secret.length < 32)
@@ -14,19 +15,22 @@ export function digest(value: string) {
 }
 export function sameOrigin(request: Request) {
   const origin = request.headers.get("origin");
-  return Boolean(
-    origin && origin === new URL(process.env.SITE_URL || request.url).origin,
-  );
+  try {
+    return Boolean(
+      origin && origin === new URL(process.env.SITE_URL || request.url).origin,
+    );
+  } catch {
+    return false;
+  }
 }
 export function anonymousSource(request: Request) {
   // Hosting must overwrite this header. Do not trust a client-supplied forwarding chain.
-  const ip = request.headers
-    .get(
-      process.env.NODE_ENV === "production" ? "x-real-ip" : "x-forwarded-for",
-    )
-    ?.split(",")[0]
-    ?.trim();
-  if (!ip) throw new Error("TRUSTED_SOURCE_HEADER_MISSING");
+  const production = process.env.NODE_ENV === "production";
+  const header = request.headers.get(
+    production ? "x-real-ip" : "x-forwarded-for",
+  );
+  const ip = production ? header?.trim() : header?.split(",")[0]?.trim();
+  if (!ip || !isIP(ip)) throw new Error("TRUSTED_SOURCE_HEADER_MISSING");
   return digest(`${new Date().toISOString().slice(0, 10)}:${ip}`);
 }
 export async function rateLimit(source: string, limit = 5, seconds = 600) {
@@ -44,28 +48,35 @@ export async function verifyTurnstile(token: unknown) {
     return true;
   if (
     typeof token !== "string" ||
+    !token.trim() ||
     token.length > 2048 ||
     !process.env.TURNSTILE_SECRET_KEY ||
     !process.env.TURNSTILE_HOSTNAME
   )
     return false;
-  const res = await fetch(
-    "https://challenges.cloudflare.com/turnstile/v0/siteverify",
-    {
-      method: "POST",
-      body: new URLSearchParams({
-        secret: process.env.TURNSTILE_SECRET_KEY,
-        response: token,
-      }),
-      signal: AbortSignal.timeout(8000),
-    },
-  );
-  const result = await res.json();
-  return (
-    result.success === true &&
-    result.hostname === process.env.TURNSTILE_HOSTNAME &&
-    result.action === "fee-report"
-  );
+  try {
+    const res = await fetch(
+      "https://challenges.cloudflare.com/turnstile/v0/siteverify",
+      {
+        method: "POST",
+        body: new URLSearchParams({
+          secret: process.env.TURNSTILE_SECRET_KEY,
+          response: token,
+        }),
+        signal: AbortSignal.timeout(8000),
+      },
+    );
+    if (!res.ok) return false;
+    const result = await res.json();
+    return Boolean(
+      result &&
+      result.success === true &&
+      result.hostname === process.env.TURNSTILE_HOSTNAME &&
+      result.action === "fee-report",
+    );
+  } catch {
+    return false;
+  }
 }
 export function passwordHash(
   password: string,
@@ -101,7 +112,7 @@ export function validSession(token: string | undefined) {
       !/^\d+$/.test(parts[0]) ||
       !/^[a-f0-9]{48}$/.test(parts[1]) ||
       !/^[a-f0-9]{64}$/.test(parts[2]) ||
-      Number(parts[0]) < Date.now()
+      Number(parts[0]) <= Date.now()
     )
       return false;
     const sig = createHmac("sha256", sessionSecret())

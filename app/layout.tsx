@@ -22,6 +22,15 @@ export const metadata: Metadata = {
 export default function Layout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="bn" data-scroll-behavior="smooth">
+      <head>
+        <link
+          rel="preload"
+          href="/fonts/bangla.woff2"
+          as="font"
+          type="font/woff2"
+          crossOrigin="anonymous"
+        />
+      </head>
       <body>
         <a className="skip" href="#main">
           মূল বিষয়বস্তুতে যান

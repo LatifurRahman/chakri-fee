@@ -1,3 +1,4 @@
+import { readJson, HttpError } from "@/lib/http";
 import { NextResponse } from "next/server";
 import { validateReport, ValidationError } from "@/lib/validation";
 import { configured } from "@/lib/db";
@@ -21,15 +22,7 @@ export async function POST(request: Request) {
       { status: 503 },
     );
   try {
-    const raw = await request.text();
-    if (raw.length > 8192)
-      return NextResponse.json({ error: "তথ্য অনেক বড়।" }, { status: 413 });
-    let body;
-    try {
-      body = JSON.parse(raw);
-    } catch {
-      return NextResponse.json({ error: "সঠিক তথ্য দিন।" }, { status: 400 });
-    }
+    const body = await readJson(request, 8192);
     const input = validateReport(body);
     const source = anonymousSource(request);
     if (!(await rateLimit(`report:${source}`)))
@@ -45,6 +38,11 @@ export async function POST(request: Request) {
     const result = await submitReport(input, source);
     return NextResponse.json(result, { status: 201 });
   } catch (error) {
+    if (error instanceof HttpError)
+      return NextResponse.json(
+        { error: error.message },
+        { status: error.status },
+      );
     if (error instanceof ValidationError)
       return NextResponse.json(
         { error: error.message, field: error.field },

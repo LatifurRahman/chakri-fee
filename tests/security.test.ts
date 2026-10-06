@@ -74,7 +74,7 @@ describe("Turnstile verification", () => {
       ] as const) {
         vi.stubGlobal(
           "fetch",
-          vi.fn().mockResolvedValue({ json: async () => result }),
+          vi.fn().mockResolvedValue({ ok: true, json: async () => result }),
         );
         expect(await verifyTurnstile("token")).toBe(expected);
       }

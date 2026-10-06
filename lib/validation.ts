@@ -21,6 +21,8 @@ export function normalizeOrganization(value: string) {
 function clean(value: unknown, field: string, max: number, required = false) {
   if (typeof value !== "string") {
     if (required) throw new ValidationError(field, "প্রতিষ্ঠানের নাম লিখুন।");
+    if (value !== undefined && value !== null)
+      throw new ValidationError(field, "সঠিক নাম লিখুন।");
     return "";
   }
   const text = value.normalize("NFC").trim().replace(/\s+/gu, " ");

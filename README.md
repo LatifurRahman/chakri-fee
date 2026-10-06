@@ -103,3 +103,9 @@ For Cloudflare Workers later, use the maintained OpenNext adapter and a supporte
 ## Current handoff
 
 The repository is the deliverable. An external GitHub remote, production database, CAPTCHA keys and public hosting URL require provisioned account access. Do not call the project production-live until real credentials are configured and deployment smoke tests pass. See `docs/verification.md` for actual checks performed in this workspace.
+
+## Regression and CI/CD release gates
+
+The complete case-family matrix and closure rules are in [docs/test-plan.md](docs/test-plan.md). Actual verification evidence is tracked separately in [docs/verification.md](docs/verification.md). [docs/deployment.md](docs/deployment.md) explains the CI-controlled Vercel deployment flow, required secrets, rollback, launch gates and the limits of free hosting.
+
+The workflow distinguishes passing CI from an unconfigured/skipped production deployment. No test fixture or local load measurement is evidence of national-scale production capacity. Additional commands are `npm run test:browser:production`, `BROWSER_NAME=firefox npm run test:browser`, `npm run test:performance` and read-only `DEPLOYMENT_URL=https://your-host npm run test:smoke`.

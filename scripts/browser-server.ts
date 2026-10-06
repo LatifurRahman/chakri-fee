@@ -28,7 +28,7 @@ const child = spawn(
   "node",
   [
     "node_modules/next/dist/bin/next",
-    "dev",
+    process.env.BROWSER_PRODUCTION === "true" ? "start" : "dev",
     "--hostname",
     "127.0.0.1",
     "--port",

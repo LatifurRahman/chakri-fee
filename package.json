@@ -15,7 +15,10 @@
     "admin:hash": "tsx scripts/admin-hash.ts",
     "format": "prettier --write .",
     "test:local-db": "tsx scripts/local-integration.ts",
-    "test:browser": "playwright test"
+    "test:browser": "playwright test",
+    "test:browser:production": "BROWSER_PRODUCTION=true playwright test",
+    "test:performance": "tsx scripts/performance.ts",
+    "test:smoke": "tsx scripts/smoke.ts"
   },
   "dependencies": {
     "next": "^16.0.0",
@@ -34,6 +37,7 @@
     "embedded-postgres": "^18.4.0-beta.17",
     "eslint": "^9.0.0",
     "eslint-config-next": "^16.0.0",
+    "lighthouse": "^13.5.0",
     "prettier": "^3.6.0",
     "tailwindcss": "^4.1.0",
     "tsx": "^4.20.0",

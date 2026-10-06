@@ -1,0 +1,25 @@
+{
+  "scope": "Local optimized production server; no live Turnstile widget or remote database. Not a national-scale capacity guarantee.",
+  "load": {
+    "scope": "localhost only; not a hosting capacity guarantee",
+    "records": 10000,
+    "organizations": 100,
+    "concurrency": 10,
+    "requests": 200,
+    "failures": 0,
+    "p95_ms": 531,
+    "p99_ms": 670,
+    "requests_per_second": 38.7
+  },
+  "lighthouse_mobile": {
+    "performance": 93,
+    "accessibility": 100,
+    "best-practices": 100,
+    "seo": 100
+  },
+  "limitations": [
+    "Synthetic fixture: 10000 approved reports across 100 organizations",
+    "Local hardware/network and bounded concurrency only",
+    "Real hosting, remote database latency and CAPTCHA overhead need deployed verification"
+  ]
+}

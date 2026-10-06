@@ -1,11 +1,7 @@
 import Link from "next/link";
 export function Brand() {
   return (
-    <Link
-      href="/"
-      className="brand"
-      aria-label="ফি দেই, কিন্তু চাকরি নাই — হোম"
-    >
+    <Link href="/" className="brand">
       <span className="mark" aria-hidden="true">
         ৳
       </span>

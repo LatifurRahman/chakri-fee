@@ -1,23 +1,27 @@
-# Verification
+# Verification and remaining release gates
 
-Verified in this workspace:
+## Locally verified
 
-- Next.js production build passes; all application and API routes compile.
-- ESLint passes without warnings; strict TypeScript passes.
-- 30 unit/security/integration tests pass against isolated embedded PostgreSQL. Coverage includes validation, normalization, median/statistics, approved-only filtering, anonymous API submission, rate limits, duplicate patterns, outliers, Bangla/case-insensitive search, admin sessions/passwords, and Turnstile hostname/action/production-bypass rules.
-- Both Playwright browser tests pass: anonymous submission with immediate aggregate refresh, flagged outlier excluded until approval, authenticated moderation, transactional organization merge, logout, role search and organization details.
-- Home, organizations and trust pages have no horizontal overflow at 320, 375, 390, 430, 768 and 1440px.
-- Homepage axe WCAG A/AA checks report zero violations. This does not replace a full manual accessibility audit.
-- Bangla social card visually inspected and saved as a static 1200×630 PNG.
+- Production Next.js build, strict TypeScript, ESLint without warnings and `git diff --check` pass.
+- **144** unit/security/API/deployment-configuration/PostgreSQL integration cases pass using isolated temporary databases.
+- **5 Chromium browser regression tests** and **2 production-mode browser tests** pass. Coverage includes anonymous submission, validation/failure input retention, double-submit protection, statistics refresh, moderation, merge, logout, role search, missing organizations, and production CAPTCHA-bypass rejection.
+- Responsive checks run at 320/375/390/430/768/1440px; enlarged text and keyboard focus are checked. Axe runs on all public pages and admin login with no A/AA violations in those automated checks. This is not a full manual accessibility audit.
+- Runtime dependency audit reports no known vulnerabilities at the time run; this is not a guarantee of security.
+- Latest local mobile Lighthouse scores: performance **93**, accessibility **100**, best practices **100**, SEO **100**. A streamed-loading layout shift and unnecessary link ARIA override found during measurement were corrected. Bangla WOFF2 is preloaded; the original TTF remains available for social-card regeneration.
+- Bounded localhost probe: **10000 synthetic reports**, **100 organizations**, **200 read requests**, concurrency **10**, **0 failures**, **531 ms p95**, **670 ms p99**. These numbers are local measurements, not a production SLA. See `performance-summary.json`.
+- No development fixtures are uploaded to a production database; tests refuse nonempty test databases and seeds are blocked in production.
 
-All test data resides in temporary databases. Local-only CAPTCHA bypass is used in browser tests; separate tests verify production disables it.
+## GitHub execution evidence
 
-Pending launch prerequisites:
+The baseline uploaded project already passed [its GitHub Actions run](https://github.com/LatifurRahman/chakri-fee/actions/runs/37410968034). Expanded CI/CD is configured to run on every main push and PR; inspect [the Actions runs](https://github.com/LatifurRahman/chakri-fee/actions) for the exact tested commit and individual job conclusions. Chromium, Firefox and production-mode suites run on the hosted CI runner. Local Firefox is blocked by this execution environment's browser runtime; it is not counted as a local pass.
 
-- Real Turnstile verification on a deployed hostname.
-- Production database credentials, migrations, cleanup schedule and backups.
-- Trusted production source-IP forwarding and HTTPS smoke tests.
-- Lighthouse scores have not been measured; no >90 score is claimed.
-- GitHub remote push and public hosting deployment are not completed. Initial CLI authentication was unavailable, and production provider credentials were not supplied.
+## Open production/manual gates
 
-See README for setup and deployment. The public-URL definition of done remains pending these prerequisites.
+- Hosting and production PostgreSQL account/configuration are not provisioned. Production deployment is disabled until `ENABLE_PRODUCTION_DEPLOY=true` plus credentials/environment settings are supplied. A readiness-job pass or skipped deploy is not a public deployment.
+- Real Turnstile challenge success/replay/expiry and a deployed widget's performance overhead.
+- Hosting-overwritten source IP across instances; TLS/pooler behavior; HTTPS smoke on the actual domain.
+- Backups and restore rehearsal; scheduled abuse-record cleanup; quota notifications and rollback rehearsal.
+- Manual screen-reader/touch testing and Safari/iOS device coverage.
+- Sustained staging load and remote database behavior before promoting to a large population.
+
+The case-family matrix is in `test-plan.md`, and deployment/hosting setup is in `deployment.md`. Automated gates can close independently of the externally blocked production gates; no claim of every possible test case or full production readiness is made.

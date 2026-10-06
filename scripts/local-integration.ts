@@ -14,12 +14,13 @@ const pg = new EmbeddedPostgres({
   onError: console.error,
   postgresFlags: ["-k", directory],
 });
+let exitCode = 1;
 try {
   await pg.initialise();
   await pg.start();
   await pg.createDatabase("fee_test");
   const code = await new Promise<number | null>((resolve) => {
-    const child = spawn("npm", ["test"], {
+    const child = spawn("npm", ["test", ...process.argv.slice(2)], {
       stdio: "inherit",
       env: {
         ...process.env,
@@ -29,8 +30,10 @@ try {
     });
     child.on("exit", resolve);
   });
-  process.exitCode = code ?? 1;
+  exitCode = code ?? 1;
 } finally {
   await pg.stop();
   await rm(directory, { recursive: true, force: true });
 }
+
+process.exit(exitCode);
