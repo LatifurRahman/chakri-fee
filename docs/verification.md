@@ -25,3 +25,7 @@ The baseline uploaded project already passed [its GitHub Actions run](https://gi
 - Sustained staging load and remote database behavior before promoting to a large population.
 
 The case-family matrix is in `test-plan.md`, and deployment/hosting setup is in `deployment.md`. Automated gates can close independently of the externally blocked production gates; no claim of every possible test case or full production readiness is made.
+
+## Cloudflare deployment migration
+
+The separate `feat/cloudflare-workers-hyperdrive` branch adds the current Cloudflare-recommended vinext/Workers toolchain and Hyperdrive. It preserves the original Next workflow and all existing tests. See [Workers verification](cloudflare-verification.md) for the migration-specific 167-test/runtime/browser evidence and remaining live-platform gates; the earlier Vercel-oriented results above are historical.

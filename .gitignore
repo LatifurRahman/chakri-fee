@@ -8,3 +8,10 @@ artifacts/
 test-results/
 playwright-report/
 .vercel/
+
+.wrangler/
+.cloudflare/
+dist/
+.dev.vars*
+
+worker-configuration.d.ts

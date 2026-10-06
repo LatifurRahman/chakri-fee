@@ -18,7 +18,14 @@
     "test:browser": "playwright test",
     "test:browser:production": "BROWSER_PRODUCTION=true playwright test",
     "test:performance": "tsx scripts/performance.ts",
-    "test:smoke": "tsx scripts/smoke.ts"
+    "test:smoke": "tsx scripts/smoke.ts",
+    "dev:cloudflare": "tsx scripts/cloudflare.ts dev --host 127.0.0.1",
+    "check:cloudflare": "vinext check",
+    "build:cloudflare": "tsx scripts/cloudflare.ts build",
+    "preview:cloudflare": "tsx scripts/cloudflare.ts preview --host 127.0.0.1",
+    "deploy:cloudflare": "tsx scripts/deploy-cloudflare.ts",
+    "types:cloudflare": "wrangler types worker-configuration.d.ts --include-runtime=false --strict-vars=false",
+    "test:cloudflare": "tsx scripts/cloudflare-test.ts"
   },
   "dependencies": {
     "next": "^16.0.0",
@@ -29,11 +36,16 @@
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
+    "@cloudflare/vite-plugin": "1.62.5",
+    "@cloudflare/workers-types": "^5.20261006.1",
     "@playwright/test": "^1.63.0",
     "@tailwindcss/postcss": "^4.1.0",
     "@types/node": "^24.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "@vinext/cloudflare": "1.0.1",
+    "@vitejs/plugin-react": "^6.0.0",
+    "@vitejs/plugin-rsc": "0.5.34",
     "embedded-postgres": "^18.4.0-beta.17",
     "eslint": "^9.0.0",
     "eslint-config-next": "^16.0.0",
@@ -42,7 +54,10 @@
     "tailwindcss": "^4.1.0",
     "tsx": "^4.20.0",
     "typescript": "^5.9.0",
-    "vitest": "^3.2.0"
+    "vinext": "1.0.1",
+    "vite": "8.3.3",
+    "vitest": "5.0.3",
+    "wrangler": "4.147.0"
   },
   "type": "module"
 }

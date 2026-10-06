@@ -1,7 +1,7 @@
 name: CI/CD
 on:
   push:
-    branches: [main]
+    branches: [main, "feat/cloudflare-workers-hyperdrive"]
   pull_request:
   workflow_dispatch:
 permissions:
@@ -12,7 +12,7 @@ concurrency:
 jobs:
   check:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     services:
       postgres:
         image: postgres:17
@@ -35,12 +35,19 @@ jobs:
       - run: npm audit --omit=dev --audit-level=high
       - run: npm test
       - run: npm run build
+      - run: npm run types:cloudflare
       - run: npm run typecheck
       - run: npx playwright install --with-deps chromium firefox
       - run: npm run test:browser
       - name: Firefox regression
         run: BROWSER_NAME=firefox npm run test:browser
       - run: npm run test:browser:production
+      - run: npm run check:cloudflare
+      - run: npm run build:cloudflare
+      - name: Workers packaging validation (no upload)
+        run: npx wrangler deploy --dry-run --config dist/server/wrangler.json
+      - name: Compiled Workers runtime regression (workerd + temporary PostgreSQL)
+        run: npm run test:cloudflare
       - name: Save browser regression evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -55,7 +62,7 @@ jobs:
     steps:
       - name: Report deployment configuration
         env:
-          ENABLED: ${{ vars.ENABLE_PRODUCTION_DEPLOY }}
+          ENABLED: ${{ vars.ENABLE_PRODUCTION_DEPLOY || 'false' }}
         run: |
           if [ "$ENABLED" = "true" ]; then
             echo "Production deployment enabled; credentials and environment gates follow." >> "$GITHUB_STEP_SUMMARY"
@@ -72,9 +79,21 @@ jobs:
       group: production-deployment
       cancel-in-progress: false
     env:
-      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      ENABLE_PRODUCTION_DEPLOY: ${{ vars.ENABLE_PRODUCTION_DEPLOY }}
+      DEPLOYMENT_TARGET: cloudflare
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+      HYPERDRIVE_ID: ${{ vars.HYPERDRIVE_ID }}
+      SITE_URL: ${{ vars.SITE_URL }}
+      TURNSTILE_HOSTNAME: ${{ vars.TURNSTILE_HOSTNAME }}
+      NEXT_PUBLIC_TURNSTILE_SITE_KEY: ${{ vars.NEXT_PUBLIC_TURNSTILE_SITE_KEY }}
+      TURNSTILE_SECRET_KEY: ${{ secrets.TURNSTILE_SECRET_KEY }}
+      ANTI_ABUSE_SECRET: ${{ secrets.ANTI_ABUSE_SECRET }}
+      ADMIN_SESSION_SECRET: ${{ secrets.ADMIN_SESSION_SECRET }}
+      ADMIN_PASSWORD_HASH: ${{ secrets.ADMIN_PASSWORD_HASH }}
+      NORMAL_FEE_MAX: ${{ vars.NORMAL_FEE_MAX || '10000' }}
+      LEADERBOARD_MIN_REPORTS: ${{ vars.LEADERBOARD_MIN_REPORTS || '5' }}
+      DEV_BYPASS_TURNSTILE: "false"
       DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
     steps:
       - uses: actions/checkout@v4
@@ -82,27 +101,22 @@ jobs:
         with:
           node-version: 24
           cache: npm
-      - name: Fail if production configuration is incomplete
-        run: |
-          test -n "$VERCEL_TOKEN"
-          test -n "$VERCEL_ORG_ID"
-          test -n "$VERCEL_PROJECT_ID"
-          test -n "$DATABASE_URL"
       - run: npm ci
-      - name: Pull production provider configuration
-        run: npx --yes vercel@62.4.0 pull --yes --environment=production --token="$VERCEL_TOKEN"
-      - name: Validate the production configuration
-        run: node --env-file=.vercel/.env.production.local --import tsx scripts/check-production.ts
-      - name: Build production artifact
-        run: npx --yes vercel@62.4.0 build --prod --token="$VERCEL_TOKEN"
-      - name: Run transactional database migrations
-        run: npm run db:migrate
-      - name: Deploy the verified artifact
-        id: publish
+      - name: Validate production configuration (without printing secrets)
         run: |
-          npx --yes vercel@62.4.0 deploy --prebuilt --prod --token="$VERCEL_TOKEN" > /tmp/deployment-url.txt
-          echo "url=$(tail -n 1 /tmp/deployment-url.txt)" >> "$GITHUB_OUTPUT"
-      - name: Read-only HTTPS deployment smoke
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          test -n "$DATABASE_URL"
+          node --import tsx scripts/check-production.ts
+      - name: Build production Worker with canonical origin and public CAPTCHA key
+        run: npm run build:cloudflare
+      - name: Verify Hyperdrive points to the migration database and disables query caching
+        run: node --import tsx scripts/check-cloudflare.ts
+      - name: Run existing transactional migrations against the Supabase origin
+        run: npm run db:migrate
+      - name: Deploy verified Worker via Wrangler with version-bound secrets
+        run: npm run deploy:cloudflare
+      - name: Read-only HTTPS production smoke
         env:
-          DEPLOYMENT_URL: ${{ steps.publish.outputs.url }}
+          DEPLOYMENT_URL: ${{ vars.SITE_URL }}
         run: npm run test:smoke

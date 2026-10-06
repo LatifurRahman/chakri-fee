@@ -26,6 +26,52 @@ describe("production release configuration gate", () => {
     expect(result.stdout).not.toContain("fixture-secret");
     expect(result.stdout).not.toContain("fixture-only");
   });
+  it.each(["false", ""])(
+    "blocks the deploy script when the opt-in is %j",
+    async (enabled) => {
+      await expect(
+        run(
+          process.execPath,
+          ["--import", "tsx", "scripts/deploy-cloudflare.ts"],
+          { env: { ...config, ENABLE_PRODUCTION_DEPLOY: enabled } },
+        ),
+      ).rejects.toThrow("Production deployment is disabled");
+    },
+  );
+  it("accepts a Workers binding without exposing a database URL", async () => {
+    const result = await run(
+      process.execPath,
+      ["--import", "tsx", "scripts/check-production.ts"],
+      {
+        env: {
+          ...config,
+          DEPLOYMENT_TARGET: "cloudflare",
+          DATABASE_URL: "",
+          HYPERDRIVE_ID: "a".repeat(32),
+        },
+      },
+    );
+    expect(result.stdout).toContain("configuration is present");
+  });
+  it.each(["", "0".repeat(32), "not-an-id"])(
+    "rejects an unconfigured Hyperdrive ID %j",
+    async (id) => {
+      await expect(
+        run(
+          process.execPath,
+          ["--import", "tsx", "scripts/check-production.ts"],
+          {
+            env: {
+              ...config,
+              DEPLOYMENT_TARGET: "cloudflare",
+              DATABASE_URL: "",
+              HYPERDRIVE_ID: id,
+            },
+          },
+        ),
+      ).rejects.toThrow();
+    },
+  );
   it.each([
     { DATABASE_URL: "" },
     { SITE_URL: "http://chakri.example.test" },

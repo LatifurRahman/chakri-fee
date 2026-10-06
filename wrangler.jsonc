@@ -1,0 +1,26 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "chakri-fee",
+  "main": "worker/index.ts",
+  "compatibility_date": "2026-10-06",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "preview_urls": false,
+  "assets": { "binding": "ASSETS", "not_found_handling": "none" },
+  "hyperdrive": [
+    {
+      "binding": "HYPERDRIVE",
+      // Deliberately invalid for production. The release script replaces this ID.
+      "id": "00000000000000000000000000000000",
+      "localConnectionString": "postgresql://postgres:postgres@127.0.0.1:5432/fee_tracker",
+    },
+  ],
+  "vars": {
+    "SITE_URL": "http://localhost:3000",
+    "TURNSTILE_HOSTNAME": "localhost",
+    "NORMAL_FEE_MAX": "10000",
+    "LEADERBOARD_MIN_REPORTS": "5",
+    "DEV_BYPASS_TURNSTILE": "false",
+  },
+  "observability": { "enabled": false },
+}
