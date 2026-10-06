@@ -1,5 +1,6 @@
+const cloudflare = process.env.DEPLOYMENT_TARGET === "cloudflare";
 const required = [
-  "DATABASE_URL",
+  ...(cloudflare ? ["HYPERDRIVE_ID"] : ["DATABASE_URL"]),
   "SITE_URL",
   "NEXT_PUBLIC_TURNSTILE_SITE_KEY",
   "TURNSTILE_SECRET_KEY",
@@ -33,12 +34,21 @@ if (process.env.DEV_BYPASS_TURNSTILE === "true")
   throw new Error(
     "Remove the development CAPTCHA bypass from production configuration",
   );
-const db = new URL(process.env.DATABASE_URL!);
-if (
-  !["postgres:", "postgresql:"].includes(db.protocol) ||
-  ["localhost", "127.0.0.1"].includes(db.hostname)
-)
-  throw new Error("A remote production PostgreSQL URL is required");
+if (cloudflare) {
+  if (
+    !/^[a-f0-9]{32}$/i.test(process.env.HYPERDRIVE_ID!) ||
+    /^0+$/.test(process.env.HYPERDRIVE_ID!)
+  )
+    throw new Error("A real HYPERDRIVE_ID is required");
+}
+if (!cloudflare || process.env.DATABASE_URL) {
+  const db = new URL(process.env.DATABASE_URL!);
+  if (
+    !["postgres:", "postgresql:"].includes(db.protocol) ||
+    ["localhost", "127.0.0.1"].includes(db.hostname)
+  )
+    throw new Error("A remote production PostgreSQL URL is required");
+}
 console.log(
   "Required production configuration is present; no secret values printed. Real source-IP, CAPTCHA and backup acceptance remain required.",
 );

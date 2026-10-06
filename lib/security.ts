@@ -7,6 +7,7 @@ import {
 } from "node:crypto";
 import { db } from "./db";
 import { isIP } from "node:net";
+import { workerRequestContext } from "./db/context";
 export function digest(value: string) {
   const secret = process.env.ANTI_ABUSE_SECRET;
   if (!secret || secret.length < 32)
@@ -24,12 +25,19 @@ export function sameOrigin(request: Request) {
   }
 }
 export function anonymousSource(request: Request) {
-  // Hosting must overwrite this header. Do not trust a client-supplied forwarding chain.
+  // Cloudflare overwrites CF-Connecting-IP. Node hosts must overwrite x-real-ip.
   const production = process.env.NODE_ENV === "production";
   const header = request.headers.get(
-    production ? "x-real-ip" : "x-forwarded-for",
+    workerRequestContext.getStore()
+      ? "cf-connecting-ip"
+      : production
+        ? "x-real-ip"
+        : "x-forwarded-for",
   );
-  const ip = production ? header?.trim() : header?.split(",")[0]?.trim();
+  const ip =
+    production || workerRequestContext.getStore()
+      ? header?.trim()
+      : header?.split(",")[0]?.trim();
   if (!ip || !isIP(ip)) throw new Error("TRUSTED_SOURCE_HEADER_MISSING");
   return digest(`${new Date().toISOString().slice(0, 10)}:${ip}`);
 }

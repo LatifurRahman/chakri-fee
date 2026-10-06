@@ -26,20 +26,20 @@ To generate random secrets: `openssl rand -hex 32`. To create an admin password 
 
 ## Environment variables
 
-| Variable                         | Purpose                                                                                                                 |
-| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `DATABASE_URL`                   | Server-only PostgreSQL URL; use the Supabase transaction pooler for serverless hosting. Use TLS for remote connections. |
-| `SITE_URL`                       | Full canonical site origin, no trailing slash. Used for metadata, sitemap and origin checks.                            |
-| `NEXT_PUBLIC_TURNSTILE_SITE_KEY` | Public widget key, present at build time.                                                                               |
-| `TURNSTILE_SECRET_KEY`           | Server-only CAPTCHA verification key.                                                                                   |
-| `TURNSTILE_HOSTNAME`             | Expected hostname returned by Turnstile (no scheme).                                                                    |
-| `ANTI_ABUSE_SECRET`              | At least 32 random characters for daily rotating HMAC source hashes.                                                    |
-| `ADMIN_SESSION_SECRET`           | Independent 32+ random characters for eight-hour signed admin sessions.                                                 |
-| `ADMIN_PASSWORD_HASH`            | Salted scrypt hash from the helper.                                                                                     |
-| `NORMAL_FEE_MAX`                 | Default 10000; larger integer BDT amounts enter moderation.                                                             |
-| `LEADERBOARD_MIN_REPORTS`        | Default 5 approved reports for median rankings.                                                                         |
-| `DEV_BYPASS_TURNSTILE`           | Local-only bypass, never honored in production.                                                                         |
-| `TEST_DATABASE_URL`              | Separate, empty disposable PostgreSQL database for integration tests.                                                   |
+| Variable                         | Purpose                                                                                                                                                                            |
+| -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`                   | Server-only PostgreSQL URL; Node development may use the Supabase transaction pooler. Workers use Hyperdrive against the direct Supabase endpoint. Use TLS for remote connections. |
+| `SITE_URL`                       | Full canonical site origin, no trailing slash. Used for metadata, sitemap and origin checks.                                                                                       |
+| `NEXT_PUBLIC_TURNSTILE_SITE_KEY` | Public widget key, present at build time.                                                                                                                                          |
+| `TURNSTILE_SECRET_KEY`           | Server-only CAPTCHA verification key.                                                                                                                                              |
+| `TURNSTILE_HOSTNAME`             | Expected hostname returned by Turnstile (no scheme).                                                                                                                               |
+| `ANTI_ABUSE_SECRET`              | At least 32 random characters for daily rotating HMAC source hashes.                                                                                                               |
+| `ADMIN_SESSION_SECRET`           | Independent 32+ random characters for eight-hour signed admin sessions.                                                                                                            |
+| `ADMIN_PASSWORD_HASH`            | Salted scrypt hash from the helper.                                                                                                                                                |
+| `NORMAL_FEE_MAX`                 | Default 10000; larger integer BDT amounts enter moderation.                                                                                                                        |
+| `LEADERBOARD_MIN_REPORTS`        | Default 5 approved reports for median rankings.                                                                                                                                    |
+| `DEV_BYPASS_TURNSTILE`           | Local-only bypass, never honored in production.                                                                                                                                    |
+| `TEST_DATABASE_URL`              | Separate, empty disposable PostgreSQL database for integration tests.                                                                                                              |
 
 ## Database
 
@@ -79,26 +79,28 @@ Visit `/admin`, log in using the configured password, and review pending/flagged
 
 The application stores no raw IP and no permanent contributor identifier. Daily-keyed HMAC values exist only in short-lived abuse tables, without a foreign key to reports. Rate limits are shared across server instances through atomic PostgreSQL upserts (five reports per ten minutes; five login attempts per fifteen minutes). Expired rows are deleted on activity; schedule `scripts/cleanup.sql` every 10 minutes using Supabase pg_cron or a database scheduler so retention stays bounded even when inactive.
 
-**Trusted source header:** production reads `x-real-ip`. The recommended Vercel deployment overwrites it at the edge. Other hosts must strip client-provided forwarding headers and inject the real source address as `x-real-ip`. The app refuses writes without it. Never deploy behind an origin that clients can reach directly and spoof this header. Do not substitute an arbitrary client-controlled `x-forwarded-for` chain. Local development uses that header from Next.js.
+**Trusted source header:** Workers read Cloudflare's overwritten `CF-Connecting-IP` and ignore forwarded/client-provided IP headers. The Node production path retains trusted `x-real-ip`; local Next development uses `x-forwarded-for`. Missing/malformed addresses refuse writes. See [deployment setup](docs/deployment.md) for Cloudflare transforms/proxy restrictions and privacy considerations.
 
 Turnstile checks token validity, configured hostname and `fee-report` action; failure blocks writes. No raw IP is sent by this application to siteverify. Hosting/Turnstile may process technical information under their own policies. There is no analytics in V1. Error logs contain error types, not form payloads. Set hosting log retention appropriately. The privacy page describes actual processing and expiry/cleanup behavior.
 
 Input is length bounded and validated server-side; control/bidi abuse, unpaired surrogates and HTML-like markup are rejected. React escapes displayed strings. No `dangerouslySetInnerHTML` is used. API origin checks defend cookie mutations; all admin operations require signed sessions. Security headers limit frames/resources. No public report IDs are returned.
 
-## Deployment: initial free-tier route
+## Deployment: Cloudflare Workers
 
-Recommended portable route: **GitHub → Vercel Hobby → Supabase free PostgreSQL + free Turnstile**, with the provider subdomain. This avoids adapting Next.js to Workers and preserves the requested Next.js stack. Check current provider limits/terms (including Vercel Hobby's personal/noncommercial restriction); free quotas are not guaranteed forever. No domain purchase is required.
+**GitHub → GitHub Actions CI → Cloudflare Workers → Hyperdrive → Supabase PostgreSQL**, with Turnstile. The Cloudflare-recommended vinext adapter runs alongside standard Next.js development/build. No D1 or schema migration is introduced. Keep `ENABLE_PRODUCTION_DEPLOY=false` until production setup and staging acceptance are complete. Deployments require passing CI and main; this migration branch cannot deploy production.
 
-1. Create a GitHub repository and push `main`. CI checks each push/PR. Keep the remote private or choose an open-source license before making it public.
-2. Create a separate, empty production Supabase project. Use its PostgreSQL owner/pooler connection with TLS. Never load development seeds.
-3. Run the migration against production using a secure local environment, then clear credentials from temporary files.
-4. Import the repository in Vercel (framework auto-detected as Next.js). Deploy with database/admin/anti-abuse variables. The public site key must be available during the build.
-5. Register the assigned hostname in Cloudflare Turnstile; configure both keys, hostname and `SITE_URL`, then rebuild. Normal submit must fail until all are ready.
-6. Confirm Vercel supplies a trusted, overwritten `x-real-ip`. Configure database cleanup and backups. Keep database connection count within free-plan quotas (`max:5` per warm instance; tune host concurrency accordingly).
-7. Verify HTTPS and the full anonymous flow, outlier moderation, login rate limits, organization searches/merge, sitemap and `/opengraph-image` on the deployed hostname. Test a CAPTCHA replay and missing/forged source headers.
-8. A custom domain later changes `SITE_URL` and Turnstile allowlist/hostname; it does not require a rewrite.
+```sh
+npm run check:cloudflare
+npm run types:cloudflare
+npm run dev:cloudflare
+npm run build:cloudflare
+npm run preview:cloudflare
+npm run test:cloudflare
+```
 
-For Cloudflare Workers later, use the maintained OpenNext adapter and a supported PostgreSQL pooler/Hyperdrive, plus a trusted source-header adapter. This repository does not pretend that a static Cloudflare Pages export can run database/API routes. The host should execute `npm run build` and `npm start`, or a supported Next.js adapter. No paid monitoring or analytics service is required; start with hosting logs.
+Workers commands use a separate Vite toolchain; the wrapper restores Next-generated types. Configure ignored `.dev.vars` and the local Hyperdrive connection override as documented. Workers production preview rejects the development CAPTCHA bypass. `postgres` uses request-owned clients and prepared statements on Hyperdrive; disable Hyperdrive query caching for fresh statistics. No remote credentials or real data are needed for the Workers regression harness.
+
+[docs/deployment.md](docs/deployment.md) contains exact Cloudflare/Supabase/dashboard/GitHub setup, every secret/binding, migration preflight, post-deployment read-only smoke, rollback and free-tier limits. Remove old Vercel/Git automatic deployment integrations so Actions remains the sole production gate. Workers CPU and Supabase quotas may require paid capacity for reliable public usage.
 
 ## Current handoff
 
@@ -106,6 +108,6 @@ The repository is the deliverable. An external GitHub remote, production databas
 
 ## Regression and CI/CD release gates
 
-The complete case-family matrix and closure rules are in [docs/test-plan.md](docs/test-plan.md). Actual verification evidence is tracked separately in [docs/verification.md](docs/verification.md). [docs/deployment.md](docs/deployment.md) explains the CI-controlled Vercel deployment flow, required secrets, rollback, launch gates and the limits of free hosting.
+The complete case-family matrix and closure rules are in [docs/test-plan.md](docs/test-plan.md). Actual verification evidence is tracked separately in [docs/verification.md](docs/verification.md). [docs/deployment.md](docs/deployment.md) explains the CI-controlled Cloudflare Workers deployment flow, required secrets, rollback, launch gates and the limits of free hosting.
 
 The workflow distinguishes passing CI from an unconfigured/skipped production deployment. No test fixture or local load measurement is evidence of national-scale production capacity. Additional commands are `npm run test:browser:production`, `BROWSER_NAME=firefox npm run test:browser`, `npm run test:performance` and read-only `DEPLOYMENT_URL=https://your-host npm run test:smoke`.
